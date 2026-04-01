@@ -1,0 +1,43 @@
+diff --git a/src/legacy/xmlParser.ts b/src/legacy/xmlParser.ts
+deleted file mode 100644
+index 4c5d6e7..0000000
+--- a/src/legacy/xmlParser.ts
++++ /dev/null
+@@ -1,35 +0,0 @@
+-/**
+- * @deprecated Use src/parser/json.ts instead.
+- * This module has been replaced by the JSON-based configuration system.
+- */
+-import { parseString } from 'xml2js';
+-
+-export interface XmlConfig {
+-  version: string;
+-  settings: Record<string, string>;
+-}
+-
+-export function parseXmlConfig(xmlContent: string): Promise<XmlConfig> {
+-  return new Promise((resolve, reject) => {
+-    parseString(xmlContent, { explicitArray: false }, (err, result) => {
+-      if (err) {
+-        reject(new Error(`XML parse error: ${err.message}`));
+-        return;
+-      }
+-      resolve({
+-        version: result.config.$.version ?? '1.0',
+-        settings: result.config.settings ?? {},
+-      });
+-    });
+-  });
+-}
+-
+-export function validateXmlConfig(config: XmlConfig): boolean {
+-  return (
+-    typeof config.version === 'string' &&
+-    config.version.length > 0 &&
+-    typeof config.settings === 'object'
+-  );
+-}
+-
+-export function serializeXmlConfig(_config: XmlConfig): string {
+-  throw new Error('serializeXmlConfig not implemented — use JSON serializer');
+-}

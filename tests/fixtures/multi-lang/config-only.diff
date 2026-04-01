@@ -1,0 +1,70 @@
+diff --git a/config/database.yaml b/config/database.yaml
+index 1a2b3c4..5d6e7f8 100644
+--- a/config/database.yaml
++++ b/config/database.yaml
+@@ -1,7 +1,9 @@
+ database:
+   host: localhost
+-  port: 5432
++  port: 5433
+   name: myapp_db
+   pool:
+-    min: 2
+-    max: 10
++    min: 5
++    max: 20
++    acquire_timeout: 30s
++    idle_timeout: 10m
+diff --git a/config/features.json b/config/features.json
+index a9b8c7d..e1f2a3b 100644
+--- a/config/features.json
++++ b/config/features.json
+@@ -1,11 +1,11 @@
+ {
+   "features": {
+-    "new_dashboard": false,
++    "new_dashboard": true,
+     "dark_mode": true,
+-    "beta_api": false,
++    "beta_api": true,
+     "analytics": {
+       "enabled": true,
+-      "sampling_rate": 0.1
++      "sampling_rate": 0.25
+     }
+   }
+ }
+diff --git a/Cargo.toml b/Cargo.toml
+index b1c2d3e..f4a5b6c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,9 +1,11 @@
+ [package]
+ name = "my-service"
+-version = "0.1.0"
++version = "0.2.0"
+ edition = "2021"
+ 
+ [dependencies]
+-tokio = { version = "1", features = ["full"] }
+-serde = { version = "1", features = ["derive"] }
++tokio = { version = "1.35", features = ["full"] }
++serde = { version = "1.0", features = ["derive"] }
+ serde_json = "1"
++axum = "0.7"
++tracing = "0.1"
+diff --git a/.env.example b/.env.example
+index c1d2e3f..a4b5c6d 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,5 +1,9 @@
+ DATABASE_URL=postgresql://localhost:5432/myapp_db
+ API_KEY=your-api-key-here
+ SECRET_KEY=change-this-in-production
+-PORT=3000
++PORT=8080
++LOG_LEVEL=info
++LOG_FORMAT=json
++STRIPE_SECRET_KEY=sk_test_...
++REDIS_URL=redis://localhost:6379
+ 

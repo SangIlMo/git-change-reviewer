@@ -1,0 +1,87 @@
+diff --git a/src/processor.ts b/src/processor.ts
+index 2c3d4e5..6f7a8b9 100644
+--- a/src/processor.ts
++++ b/src/processor.ts
+@@ -5,9 +5,14 @@ import { Queue } from './queue.js';
+
+ export class Processor {
+   private queue: Queue;
++  private readonly maxRetries: number;
+
+-  constructor() {
++  constructor(maxRetries = 3) {
+     this.queue = new Queue();
++    this.maxRetries = maxRetries;
+   }
+
+-  async process(item: unknown): Promise<void> {
+-    await this.queue.push(item);
++  async process(item: unknown): Promise<boolean> {
++    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
++      try {
++        await this.queue.push(item);
++        return true;
++      } catch (err) {
++        if (attempt === this.maxRetries) throw err;
++      }
++    }
++    return false;
+   }
+ }
+diff --git a/scripts/migrate.py b/scripts/migrate.py
+index a1b2c3d..e4f5a6b 100644
+--- a/scripts/migrate.py
++++ b/scripts/migrate.py
+@@ -1,14 +1,22 @@
+ import psycopg2
++import logging
++import sys
+ from datetime import datetime
+
++logging.basicConfig(level=logging.INFO)
++logger = logging.getLogger(__name__)
++
+ def run_migration(conn_string: str) -> None:
+     conn = psycopg2.connect(conn_string)
+     cursor = conn.cursor()
++    logger.info("Starting migration at %s", datetime.utcnow().isoformat())
+     try:
+-        cursor.execute("ALTER TABLE events ADD COLUMN metadata JSONB")
++        cursor.execute("""
++            ALTER TABLE events
++            ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb
++        """)
+         conn.commit()
+-        print(f"Migration completed at {datetime.utcnow()}")
+-    except Exception as e:
+-        print(f"Migration failed: {e}")
++        logger.info("Migration completed successfully")
++    except Exception:
++        logger.exception("Migration failed, rolling back")
+         conn.rollback()
++        sys.exit(1)
+     finally:
+         cursor.close()
+         conn.close()
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index b0c1d2e..f3a4b5c 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -10,11 +10,17 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: actions/setup-node@v3
++      - uses: actions/setup-node@v4
+         with:
+-          node-version: '18'
++          node-version: '20'
++          cache: 'npm'
+       - run: npm ci
+       - run: npm test
++      - name: Upload coverage
++        uses: codecov/codecov-action@v4
++        if: always()
++        with:
++          token: ${{ secrets.CODECOV_TOKEN }}
++          files: ./coverage/lcov.info

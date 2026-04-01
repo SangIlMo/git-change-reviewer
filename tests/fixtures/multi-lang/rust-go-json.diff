@@ -1,0 +1,80 @@
+diff --git a/src/cache/lru.rs b/src/cache/lru.rs
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/cache/lru.rs
++++ b/src/cache/lru.rs
+@@ -1,12 +1,14 @@
+-use std::collections::HashMap;
++use std::collections::{HashMap, VecDeque};
++use std::hash::Hash;
+ 
+-pub struct LruCache {
++pub struct LruCache<K, V> {
+     capacity: usize,
+-    store: HashMap<String, String>,
++    store: HashMap<K, V>,
++    order: VecDeque<K>,
+ }
+ 
+-impl LruCache {
+-    pub fn new(capacity: usize) -> Self {
+-        LruCache { capacity, store: HashMap::new() }
++impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
++    pub fn new(capacity: usize) -> Self {
++        LruCache { capacity, store: HashMap::with_capacity(capacity), order: VecDeque::with_capacity(capacity) }
+     }
+ }
+diff --git a/handlers/user_handler.go b/handlers/user_handler.go
+index a9b8c7d..e1f2a3b 100644
+--- a/handlers/user_handler.go
++++ b/handlers/user_handler.go
+@@ -1,14 +1,21 @@
+ package handlers
+ 
+ import (
+ 	"encoding/json"
+ 	"net/http"
++	"context"
++	"errors"
++	"time"
+ )
+ 
+ type UserHandler struct {
+-	store UserStore
++	store   UserStore
++	timeout time.Duration
+ }
+ 
+-func NewUserHandler(store UserStore) *UserHandler {
+-	return &UserHandler{store: store}
++func NewUserHandler(store UserStore, timeout time.Duration) *UserHandler {
++	if timeout <= 0 {
++		timeout = 5 * time.Second
++	}
++	return &UserHandler{store: store, timeout: timeout}
+ }
+diff --git a/schemas/user.schema.json b/schemas/user.schema.json
+index b1c2d3e..f4a5b6c 100644
+--- a/schemas/user.schema.json
++++ b/schemas/user.schema.json
+@@ -1,15 +1,19 @@
+ {
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "title": "User",
+   "type": "object",
+   "required": ["id", "email"],
+   "properties": {
+     "id": {
+-      "type": "string"
++      "type": "string",
++      "format": "uuid",
++      "description": "Unique identifier for the user"
+     },
+     "email": {
+-      "type": "string"
++      "type": "string",
++      "format": "email",
++      "maxLength": 255
+     }
+   }
+ }
+ 
