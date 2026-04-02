@@ -67,13 +67,13 @@ If this fails with an authentication error, tell the user: "Not authenticated wi
 Run the fetch-context script with the repository and PR number you determined above. Replace `REPO` and `PR_NUMBER` with the actual values:
 
 ```bash
-bash skills/annotate-pr/scripts/fetch-context.sh "REPO" "PR_NUMBER"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/fetch-context.sh" "REPO" "PR_NUMBER"
 ```
 
 For example, if the repo is `acme/my-service` and the PR number is `42`:
 
 ```bash
-bash skills/annotate-pr/scripts/fetch-context.sh "acme/my-service" "42"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/fetch-context.sh" "acme/my-service" "42"
 ```
 
 Capture the JSON output. This JSON contains:
@@ -105,7 +105,7 @@ Store the fetched values:
 Pipe the diff content through the parse-hunks script. Use the actual diff content captured in Step 1:
 
 ```bash
-echo "$DIFF" | bash skills/annotate-pr/scripts/parse-hunks.sh
+echo "$DIFF" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/parse-hunks.sh"
 ```
 
 This returns a JSON array of change blocks. Each block has:
@@ -287,13 +287,13 @@ If the user says yes, proceed to the posting step below. If the user says no or 
 Post the comments using the post-review script. Pipe the JSON array to the script with the actual values for REPO, PR_NUMBER, and HEAD_SHA:
 
 ```bash
-echo "$COMMENTS_JSON" | bash skills/annotate-pr/scripts/post-review.sh "REPO" "PR_NUMBER" "HEAD_SHA"
+echo "$COMMENTS_JSON" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/post-review.sh" "REPO" "PR_NUMBER" "HEAD_SHA"
 ```
 
 For example, if repo is `acme/my-service`, PR is `42`, and SHA is `abc123def456`:
 
 ```bash
-echo "$COMMENTS_JSON" | bash skills/annotate-pr/scripts/post-review.sh "acme/my-service" "42" "abc123def456"
+echo "$COMMENTS_JSON" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/post-review.sh" "acme/my-service" "42" "abc123def456"
 ```
 
 **Exit code handling:**
@@ -327,4 +327,4 @@ Handle these conditions at any point in the steps above:
 | Rate limited during posting (retries in progress) | The post-review script retries automatically. Report any wait messages shown on stderr to the user. |
 | Rate limit exhausted (exit code `4`) | Tell user: "GitHub rate limit was exceeded after all retries. Wait a few minutes and retry with `/annotate-pr PR_NUMBER`. Check your reset time with `gh api /rate_limit`." and stop. |
 | All change blocks skipped | Tell user: "No annotatable changes found. All files in this PR were skipped (binary, lock, or generated files)." and stop. |
-| Script not found | Tell user: "Helper script not found. Make sure the skill is installed correctly at skills/annotate-pr/scripts/." and stop. |
+| Script not found | Tell user: "Helper script not found. Make sure the plugin is installed correctly." and stop. |

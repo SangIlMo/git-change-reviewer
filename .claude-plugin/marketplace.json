@@ -6,16 +6,15 @@
   },
   "plugins": [
     {
-      "name": "annotate-pr-plugin",
-      "source": ".",
+      "name": "annotate-pr",
+      "source": "./plugins/annotate-pr",
       "description": "Analyzes PR changes and posts AI-generated intent annotations as review comments",
       "version": "1.0.0",
       "author": {
         "name": "SangIlMo"
       },
-      "license": "MIT",
-      "keywords": ["pr", "review", "annotation", "code-review", "ai"],
-      "category": "development"
+      "category": "development",
+      "tags": ["pr", "review", "annotation", "code-review", "ai"]
     }
   ]
 }
