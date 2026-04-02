@@ -1,0 +1,12 @@
+{
+  "name": "annotate-pr-plugin",
+  "description": "Analyzes PR changes and posts AI-generated intent annotations as review comments",
+  "version": "1.0.0",
+  "author": {
+    "name": "SangIlMo"
+  },
+  "repository": "https://github.com/SangIlMo/git-change-reviewer",
+  "license": "MIT",
+  "keywords": ["pr", "review", "annotation", "code-review", "ai"],
+  "skills": ["./skills/annotate-pr/SKILL.md"]
+}
