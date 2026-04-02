@@ -1,11 +1,16 @@
-node_modules/
-dist/
-build/
-*.log
-.env*
-coverage/
+# OS
 .DS_Store
-*.tmp
-*.swp
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.tmp
+
+# Environment
+.env*
+
+# Node (if any dev tooling is added later)
+node_modules/
+dist/
