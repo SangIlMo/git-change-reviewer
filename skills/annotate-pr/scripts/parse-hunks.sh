@@ -85,14 +85,18 @@ function flush_block() {
   flush_block()
   in_file = 1
   # Parse @@ -old,count +new,start @@ — extract new file start line
-  if (match($0, /\+([0-9]+)/, arr)) {
-    current_line = arr[1] + 0
-  } else {
-    # Fallback: try without gensub
-    line = $0
-    sub(/.*\+/, "", line)
-    sub(/[^0-9].*/, "", line)
-    current_line = line + 0
+  # BSD awk compatible: use field splitting and substring extraction
+  line = $0
+  # Find the + part: split by spaces and find the field starting with +
+  for (i = 1; i <= NF; i++) {
+    if ($i ~ /^\+/) {
+      # Extract the number after the +
+      num_str = $i
+      sub(/^\+/, "", num_str)
+      sub(/,.*/, "", num_str)
+      current_line = num_str + 0
+      break
+    }
   }
   context_count = 0
 }
