@@ -4,7 +4,7 @@ description: Analyzes PR changes and posts intent annotations as inline review c
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: Bash(gh *), Bash(bash *)
-argument-hint: "[PR-number] [--dry-run]"
+argument-hint: "[PR-number] [--dry-run] [--output-mode=checks|review]"
 ---
 
 You are executing the `annotate-pr` skill. Follow these steps precisely and in order. Use only the allowed tools: `Bash(gh *)` and `Bash(bash *)`.
@@ -17,6 +17,8 @@ Parse the arguments the user provided after `/annotate-pr`:
 
 - If a number is present: use it as the PR number.
 - If `--dry-run` is present anywhere: enable dry-run mode (preview only, do not post to GitHub).
+- If `--output-mode=checks` or `--output-mode=review` is present: use the specified output mode. If no `--output-mode` is specified, default to `checks`.
+- If `--output-mode` is present with an invalid value (anything other than `checks` or `review`): tell the user "Invalid output mode. Valid values: checks, review" and stop.
 - If no PR number is provided: auto-detect by running:
 
 ```bash
@@ -37,6 +39,7 @@ You now have:
 - `REPO` — the repository in `owner/repo` format
 - `PR_NUMBER` — the pull request number
 - `DRY_RUN` — true or false
+- `OUTPUT_MODE` — `checks` or `review` (default: `checks`)
 
 ---
 
@@ -217,6 +220,7 @@ Collect all generated annotations into a JSON array. Each element must have:
 - `side` — always `"RIGHT"`
 - `start_side` — always `"RIGHT"` (include only if `start_line` is included)
 - `body` — the formatted annotation text
+- `title` — a short label based on source_type: `"Intent (Context)"`, `"Intent (Inferred)"`, or `"Intent (Conflict)"`
 
 Example for a multi-line block:
 ```json
@@ -226,7 +230,8 @@ Example for a multi-line block:
   "start_line": 42,
   "side": "RIGHT",
   "start_side": "RIGHT",
-  "body": "> **Intent**: Adds JWT token generation with 24-hour expiry per the session timeout requirement in the PR description.\n> **Source**: PR description\n> **Confidence**: High"
+  "body": "> **Intent**: Adds JWT token generation with 24-hour expiry per the session timeout requirement in the PR description.\n> **Source**: PR description\n> **Confidence**: High",
+  "title": "Intent (Context)"
 }
 ```
 
@@ -236,7 +241,8 @@ Example for a single-line block:
   "path": "src/auth/middleware.ts",
   "line": 12,
   "side": "RIGHT",
-  "body": "> **Intent** [Inferred]: Guards the route against unauthenticated requests by checking for a valid token before handler execution.\n> **Confidence**: Medium\n>\n> _This annotation was inferred from code analysis. The change context did not provide explicit reasoning._"
+  "body": "> **Intent** [Inferred]: Guards the route against unauthenticated requests by checking for a valid token before handler execution.\n> **Confidence**: Medium\n>\n> _This annotation was inferred from code analysis. The change context did not provide explicit reasoning._",
+  "title": "Intent (Inferred)"
 }
 ```
 
@@ -256,7 +262,7 @@ Count the annotations by type:
 Display each annotation in the terminal in this format:
 
 ```
-[DRY RUN] Would post COUNT_TOTAL annotations to PR #PR_NUMBER:
+[DRY RUN] [Output Mode: OUTPUT_MODE] Would post COUNT_TOTAL annotations to PR #PR_NUMBER:
 
 --- path/to/file.ts (lines START_LINE-END_LINE) [TYPE] ---
 > **Intent**: ...
@@ -276,6 +282,7 @@ Summary: COUNT_TOTAL annotations generated for COUNT_FILES files
 - Context-based: COUNT_CONTEXT (high confidence)
 - Inferred: COUNT_INFERRED (medium confidence)
 - Conflict: COUNT_CONFLICT (low confidence)
+- Output mode: OUTPUT_MODE
 ```
 
 Then ask the user: "Would you like to post these annotations to PR #PR_NUMBER? (yes/no)"
@@ -283,6 +290,30 @@ Then ask the user: "Would you like to post these annotations to PR #PR_NUMBER? (
 If the user says yes, proceed to the posting step below. If the user says no or anything other than yes, tell them "Dry-run complete. No annotations were posted." and stop.
 
 ### If posting mode (not dry-run, or user approved after dry-run):
+
+#### If OUTPUT_MODE is `checks`:
+
+First, build a checks-compatible JSON array from the comments. Each element must have:
+- `path` — file path
+- `start_line` — start line number
+- `end_line` — end line number (use `line` value from the comments array)
+- `title` — the title field from the comments array
+- `message` — the `body` field from the comments array
+
+Pipe this JSON array to the post-checks script:
+
+```bash
+echo "$CHECKS_JSON" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/post-checks.sh" "REPO" "PR_NUMBER" "HEAD_SHA"
+```
+
+**Exit code handling for post-checks.sh:**
+- Exit code `0`: report the success output from the script to the user, then show the summary counts.
+- Exit code `2`: tell the user "GitHub CLI authentication failed while posting. Run `gh auth login`." Then stop.
+- Exit code `3`: **Fallback to review comments.** Display warning: "Checks API not available for this token. Falling back to review comments." Then re-post the annotations using `post-review.sh` (see review mode below). The `post-review.sh` script does not use the `title` field, so you can pass the original comments array as-is.
+- Exit code `4`: tell the user "GitHub rate limit was exceeded and all retries were exhausted. No annotations were posted in the affected batch. Wait a few minutes and then retry by running `/annotate-pr PR_NUMBER` again. If the problem persists, try posting in smaller increments or wait until your rate limit resets (check with `gh api /rate_limit`)." Then stop.
+- Exit code `1`: show the error output and tell the user "Some or all annotations failed to post. Check the output above for details."
+
+#### If OUTPUT_MODE is `review` (or falling back from checks):
 
 Post the comments using the post-review script. Pipe the JSON array to the script with the actual values for REPO, PR_NUMBER, and HEAD_SHA:
 
@@ -296,7 +327,7 @@ For example, if repo is `acme/my-service`, PR is `42`, and SHA is `abc123def456`
 echo "$COMMENTS_JSON" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/post-review.sh" "acme/my-service" "42" "abc123def456"
 ```
 
-**Exit code handling:**
+**Exit code handling for post-review.sh:**
 - Exit code `0`: report the success output from the script to the user, then show the summary counts.
 - Exit code `2`: tell the user "GitHub CLI authentication failed while posting. Run `gh auth login`." Then stop.
 - Exit code `4`: tell the user "GitHub rate limit was exceeded and all retries were exhausted. No annotations were posted in the affected batch. Wait a few minutes and then retry by running `/annotate-pr PR_NUMBER` again. If the problem persists, try posting in smaller increments or wait until your rate limit resets (check with `gh api /rate_limit`)." Then stop.
@@ -305,7 +336,7 @@ echo "$COMMENTS_JSON" | bash "${CLAUDE_PLUGIN_ROOT}/scripts/post-review.sh" "acm
 On success, show the final summary:
 
 ```
-Annotations posted to PR #PR_NUMBER in REPO.
+Annotations posted to PR #PR_NUMBER in REPO (via OUTPUT_MODE).
 - Context-based: COUNT_CONTEXT (high confidence)
 - Inferred: COUNT_INFERRED (medium confidence)
 - Conflict: COUNT_CONFLICT (low confidence)
@@ -326,5 +357,7 @@ Handle these conditions at any point in the steps above:
 | No open PR for current branch | Tell user: "No open PR found for the current branch. Push your branch and open a PR first, or specify a PR number." and stop. |
 | Rate limited during posting (retries in progress) | The post-review script retries automatically. Report any wait messages shown on stderr to the user. |
 | Rate limit exhausted (exit code `4`) | Tell user: "GitHub rate limit was exceeded after all retries. Wait a few minutes and retry with `/annotate-pr PR_NUMBER`. Check your reset time with `gh api /rate_limit`." and stop. |
+| Checks API permission denied (exit code `3`) | Display warning: "Checks API not available for this token. Falling back to review comments." Then re-post annotations via `post-review.sh`. |
 | All change blocks skipped | Tell user: "No annotatable changes found. All files in this PR were skipped (binary, lock, or generated files)." and stop. |
+| Invalid output mode | Tell user: "Invalid output mode. Valid values: checks, review" and stop. |
 | Script not found | Tell user: "Helper script not found. Make sure the plugin is installed correctly." and stop. |
